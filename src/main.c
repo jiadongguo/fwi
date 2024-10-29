@@ -1,5 +1,5 @@
 /*
-seismic wavefield modeling with effective absorbing layer
+a simple program for fwi
 */
 
 #include "cstd.h"
@@ -35,6 +35,7 @@ float laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2)
     lapx = (c2 * (fdx[0] + fdx[4]) + c1 * (fdx[1] + fdx[3]) + c0 * fdx[2]) * d2;
     return lapx + lapz;
 }
+
 void fun_forward(acpar par, float *pre, float *curr, float *next)
 {
     float *vv;
@@ -86,15 +87,9 @@ void fun_backward(acpar par, float *pre, float *curr, float *next)
     }
     eal_apply(par, pre, curr, next);
 }
-float fun_obj(float *dobs, float *drcd, float *derr, int n)
+float fun_obj(acpar par, float *wt)
 {
     float obj = 0;
-    for (int i = 0; i < n; i++)
-    {
-        derr[i] = drcd[i] - dobs[i];
-        obj += pow(derr[i], 2);
-    }
-    return obj;
 }
 
 void fun_gradient(float *g /* backward wavefield */, float *lap, int it, acpar par, float *grad)
@@ -214,7 +209,6 @@ int main(int argc, char **argv)
         err("receiver position outer bound");
     /* ===================================================================================================== */
     acpar par = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vel);
-    acpar partmp = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vel);
 
     FILE *fshots = fopen(shots, "rb");
     FILE *fout = fopen(out, "wb");
@@ -231,7 +225,8 @@ int main(int argc, char **argv)
     derr = alloc1float(nt * nr);
     lap = alloc1float(nzx);
     vtmp = alloc1float(nzx);
-
+    memcpy(vtmp, vel, sizeof(float) * nzx);
+    acpar partmp = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vtmp); /* test model */
     eal_init(par, 1e-3, 0);
     for (int iter = 0; iter < nter; iter++)
     {
@@ -283,7 +278,10 @@ int main(int argc, char **argv)
         /* update velocity model */
         /* test model */
         float alphatest = fun_alphatest(nzx, par, grad);
-        }
+        memcpy(vtmp, vel, sizeof(float) * nzx);
+        fun_update(partmp, alphatest, grad);
+        pad2(vtmp, partmp->vv, nz, nx, lft, rht, top, bot);
+    }
     eal_close();
     return 0;
 }
