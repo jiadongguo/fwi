@@ -204,6 +204,7 @@ float sdot(int n, float *a, float *b);
 double ddot(int n, double *a, double *b);
 void saxpy(int n, float alpha, float *a, float *b);
 /* blas3 */
+void transp(int m, int n, float *a, float *ta);
 void sgemm(int m, int n, int k, float *A, float *B, float *C);
 void dgemm(int m, int n, int k, double *A, double *B, double *C);
 #endif
