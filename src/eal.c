@@ -1,9 +1,9 @@
 #include "waveutils.h"
 #include "cstd.h"
-static *d;          /* absorbing coefficient */
+static float *d;    /* absorbing coefficient */
 static float alpha; /*theoretical reflection coefficient*/
 static int mode;
-float laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2);
+float fun_laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2);
 void eal_init(acpar par, float alpha_, int mode_)
 {
     alpha = 1. / alpha_;
@@ -193,8 +193,8 @@ void eal_init(acpar par, float alpha_, int mode_)
 
 void eal_apply(acpar par, float *pre, float *curr, float *next)
 {
-    int nz, nx, nzb, nxb, nzxb, lft, top, bot, rht;
-    nz = par->nz, nx = par->nx, nzb = par->nzb, nxb = par->nxb, nzxb = par->nzxb, lft = par->lft, top = par->top, bot = par->bot, rht = par->rht;
+    int nz, nx, nzb, nxb, lft, top;
+    nz = par->nz, nx = par->nx, nzb = par->nzb, nxb = par->nxb, lft = par->lft, top = par->top;
     float *vv = par->vv, dt = par->dt, dz = par->dz, dx = par->dx, tmp, lap;
     for (int ix = 0; ix < nxb; ix++)
     {
@@ -204,7 +204,7 @@ void eal_apply(acpar par, float *pre, float *curr, float *next)
                 continue;
             /* absorbing area */
             tmp = 1. / (d[ix * nzb + iz] * dt + 1);
-            lap = laplace(nzb, nxb, iz, ix, curr, dz, dx);
+            lap = fun_laplace(nzb, nxb, iz, ix, curr, dz, dx);
             next[ix * nzb + iz] = (d[ix * nzb + iz] * dt - 1) * tmp * pre[ix * nzb + iz] + (2 - pow(d[ix * nzb + iz] * dt, 2)) * tmp * curr[ix * nzb + iz] + pow(vv[ix * nzb + iz] * dt, 2) * tmp * lap;
         }
     }

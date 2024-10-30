@@ -1,6 +1,9 @@
 echo "#input parameters
 ===============================================================================
-vpfile=vp //velocity file
+nter=1
+verb=y
+vpfile=vini //velocity file
+shots=shots
 wtfile=wt //wavelet file
 nt=2000 //number of time steps
 dt=0.001 //temporal sampling
@@ -23,9 +26,8 @@ rz=0
 ns=20
 nr=300
 mode=0 //type of EAL 0,EAL 1,MEAL
-out=wfd //wavefield output file
+out=vinv //wavefield output file
 
 " >inputpar.txt
 
-mpirun -n 20 ../bin/fdmodeling2 $(cat inputpar.txt)
-python main.py $(cat inputpar.txt)
+../bin/fwi $(cat inputpar.txt)

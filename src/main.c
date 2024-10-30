@@ -7,7 +7,7 @@ a simple program for fwi
 
 /* ======================================================================================
 
-fun_laplace : laplace opeprator
+fun_fun_laplace : fun_laplace opeprator
 fun_forward : Seismic waves travel forward
 fun_backward : Seismic waves travel backward
 fun_obj : objective function of fwi
@@ -57,7 +57,7 @@ void fun_forward(acpar par, float *pre, float *curr, float *next, float *lap)
     {
         for (int iz = top; iz < top + nz; iz++)
         {
-            tmp = laplace(nzb, nxb, iz, ix, curr, dz, dx);
+            tmp = fun_laplace(nzb, nxb, iz, ix, curr, dz, dx);
             if (lap != NULL)
             {
                 lap[(ix - lft) * nz + (iz - top)] = tmp;
@@ -71,7 +71,6 @@ void fun_backward(acpar par, float *pre, float *curr, float *next)
 {
     float *vv;
     int nz, nx, nzb, nxb, top, lft;
-    int nr = par->nr;
     float dz, dx, dt;
     nz = par->nz;
     nx = par->nx;
@@ -88,7 +87,7 @@ void fun_backward(acpar par, float *pre, float *curr, float *next)
     {
         for (int iz = top; iz < top + nz; iz++)
         {
-            next[ix * nzb + iz] = laplace(nzb, nxb, iz, ix, curr, dz, dx) * (vv[ix * nzb + iz] * dt) * (vv[ix * nzb + iz] * dt) + 2 * curr[ix * nzb + iz] - pre[ix * nzb + iz];
+            next[ix * nzb + iz] = fun_laplace(nzb, nxb, iz, ix, curr, dz, dx) * (vv[ix * nzb + iz] * dt) * (vv[ix * nzb + iz] * dt) + 2 * curr[ix * nzb + iz] - pre[ix * nzb + iz];
         }
     }
     eal_apply(par, pre, curr, next);
@@ -99,8 +98,8 @@ void fun_record(acpar par, float *curr, float *rcd)
     int rx, rz;
     for (int ir = 0; ir < nr; ir++)
     {
-        rx = par->rx + par->lft + par->jsx * ir;
-        rz = par->rz + par->top + par->jsz * ir;
+        rx = par->rx + par->lft + par->jrx * ir;
+        rz = par->rz + par->top + par->jrz * ir;
         rcd[ir] = curr[rx * nzb + rz];
     }
 }
@@ -217,9 +216,8 @@ int main(int argc, char **argv)
         err("receiver position outer bound");
     /* ===================================================================================================== */
 
-    FILE *fout = fopen(out, "wb");
     float alpha;
-    float *tmp, *dobs, *lap, *derr, *dcal, *grad, *dcaltmp;
+    float *tmp, *dobs, *lap, *dcal, *grad, *dcaltmp;
     wt = alloc1float(nt);
     {
         FILE *fd = fopen(fwt, "rb");
@@ -263,9 +261,8 @@ int main(int argc, char **argv)
     /* ======================================================observation system definition======================================================================================================= */
     acpar partmp = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vtmp); /* test model */
     acpar par = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vel);
-    acpar partmp = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vtmp);
     int nzxb = par->nzxb, nzb = par->nzb, nxb = par->nxb, nzx = par->nzx;
-    lap = alloc1float(nzx);
+    lap = alloc1float(nzx * nt);
     float *p0, *p1, *p2;
     p0 = alloc1float(nzxb);
     p1 = alloc1float(nzxb);
@@ -281,7 +278,7 @@ int main(int argc, char **argv)
             start = clock();
         }
         float obj = 0;
-        memset(grad, 0, sizeof(float) * nzxb);
+        memset(grad, 0, sizeof(float) * nzx);
         eal_init(par, 1e-3, 0);
         for (int is = 0; is < ns; is++)
         {
@@ -289,15 +286,18 @@ int main(int argc, char **argv)
             memset(p1, 0, sizeof(float) * nzxb);
             memset(p2, 0, sizeof(float) * nzxb);
             /* ====================================forward modeling ===========================*/
+
             fun_forward(par, p0, p1, p2, NULL);
             fun_addsrc(false, par, wt[0], p1, is);
             fun_record(par, p1, dcal + is * nr * nt + 0 * nr);
             tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
             for (int it = 1; it < nt; it++)
             {
-
+                if (verb)
+                {
+                    warn("forward start iter=%d/%d,is=%d/%d,it=%d/%d", iter, nter, is, ns, it, nt);
+                }
                 fun_forward(par, p0, p1, p2, lap + (it - 1) * nz * nx);
-
                 tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
                 fun_addsrc(false, par, wt[it], p1, is);
                 fun_record(par, p1, dcal + is * nr * nt + it * nr);
@@ -306,11 +306,12 @@ int main(int argc, char **argv)
                     obj += pow(dcal[it * nr + ig], 2);
                 }
             }
+
             for (int ix = 0; ix < nx; ix++)
             {
                 for (int iz = 0; iz < nz; iz++)
                 {
-                    lap[ix * nz + iz] = fun_laplace(nzb, nxb, ix + lft, iz + top, p1, dz, dx);
+                    lap[(nt - 1) * nz * nx + ix * nz + iz] = fun_laplace(nzb, nxb, ix + lft, iz + top, p1, dz, dx);
                 }
             }
             /* ==========================================================================================*/
@@ -320,6 +321,11 @@ int main(int argc, char **argv)
             memset(p2, 0, sizeof(float) * nzxb);
             for (int it = nt - 1; it >= 0; it--)
             {
+
+                if (verb)
+                {
+                    warn("backward start iter=%d/%d,is=%d/%d,it=%d/%d", iter, nter, is, ns, it, nt);
+                }
                 fun_backward(par, p0, p1, p2);
                 tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
                 for (int ir = 0; ir < nr; ir++)
@@ -383,6 +389,12 @@ int main(int argc, char **argv)
             warn("costtime=%.4f,iter=%d,obj=%d", 1. * (finish - start) / CLOCKS_PER_SEC, iter, obj);
         }
     }
-
+    {
+        FILE *fd = fopen(out, "wb");
+        if (fd == NULL)
+            err("can't open output file");
+        fread(par->v, sizeof(float) * nzx, 1, fd);
+        fclose(fd);
+    }
     return 0;
 }

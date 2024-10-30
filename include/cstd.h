@@ -169,6 +169,7 @@ int countnparval(int n, char *name);
 void checkpars(void);
 
 /* string to numeric conversion with error checking */
+bool eatob(char *s);
 short eatoh(char *s);
 unsigned short eatou(char *s);
 int eatoi(char *s);
@@ -192,7 +193,7 @@ void err(char *fmt, ...);
 void warn(char *fmt, ...);
 
 /* Claerbout's box-triangle smoothing adapted for 2D */
-void triangle_smoothing(float **mod, int n1, int n2, int r1, int r2, int repeat);
+// void triangle_smoothing(float **mod, int n1, int n2, int r1, int r2, int repeat);
 
 /* pading for 2D model */
 void pad2(const float *x, float *xx, const int nz, const int nx, const int lft, const int rht, const int top, const int bot);
