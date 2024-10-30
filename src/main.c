@@ -142,8 +142,8 @@ float fun_alphatest(acpar par, float *grad)
 int main(int argc, char **argv)
 {
     initargs(argc, argv);
-    int nter;                       /* total number of iterations */
-    char *fwt, *fvel, *shots, *out; /*observed seismogram*/
+    int nter;                              /* total number of iterations */
+    char *fwt, *fvel, *shots, *out, *fobj; /*observed seismogram*/
     int nz, nx, nt, top, bot, lft, rht;
     int ns, sz, sx, jsx, jsz, rz, rx, jrx, jrz, nr;
     float dz, dx, dt;
@@ -202,6 +202,10 @@ int main(int argc, char **argv)
         err("need dx");
     if (!getparfloat("d1", &dz))
         err("need dz");
+    if (!getparstring("obj", &fobj))
+    {
+        err("need obj");
+    }
     if (!getparstring("shots", &shots))
         err("need shots for observed seismogram");
     if (!getparstring("vpfile", &fvel))
@@ -271,6 +275,7 @@ int main(int argc, char **argv)
     clock_t start, finish;
     double num1, num2;
     /*====================================================================================================================*/
+    FILE *Fobj = fopen(fobj, "w");
     for (int iter = 0; iter < nter; iter++)
     {
         if (verb)
@@ -295,7 +300,7 @@ int main(int argc, char **argv)
             {
                 if (verb)
                 {
-                    warn("forward start iter=%d/%d,is=%d/%d,it=%d/%d", iter, nter, is, ns, it, nt);
+                    warn("forward start iter=%d/%d,is=%d/%d,it=%d/%d", iter + 1, nter, is + 1, ns, it, nt);
                 }
                 fun_forward(par, p0, p1, p2, lap + (it - 1) * nz * nx);
                 tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
@@ -303,7 +308,7 @@ int main(int argc, char **argv)
                 fun_record(par, p1, dcal + is * nr * nt + it * nr);
                 for (int ig = 0; ig < nr; ig++)
                 {
-                    obj += pow(dcal[it * nr + ig], 2);
+                    obj += pow(dcal[is * nr * nt + it * nr + ig] - dobs[is * nr * nt + it * nr + ig], 2);
                 }
             }
 
@@ -324,7 +329,7 @@ int main(int argc, char **argv)
 
                 if (verb)
                 {
-                    warn("backward start iter=%d/%d,is=%d/%d,it=%d/%d", iter, nter, is, ns, it, nt);
+                    warn("backward start iter=%d/%d,is=%d/%d,it=%d/%d", iter + 1, nter, is + 1, ns, it, nt);
                 }
                 fun_backward(par, p0, p1, p2);
                 tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
@@ -382,19 +387,21 @@ int main(int argc, char **argv)
             par->v[ix] -= alpha * grad[ix];
         }
         pad2(par->v, par->vv, nz, nx, lft, rht, top, bot);
-
         if (verb)
         {
             finish = clock();
-            warn("costtime=%.4f,iter=%d,obj=%d", 1. * (finish - start) / CLOCKS_PER_SEC, iter, obj);
+            warn("costtime=%.4f,iter=%d,obj=%g,alpha=%g", 1. * (finish - start) / CLOCKS_PER_SEC, iter + 1, obj, alpha);
         }
+        fprintf(Fobj, "%g\n", obj);
+        fflush(Fobj);
     }
     {
         FILE *fd = fopen(out, "wb");
         if (fd == NULL)
             err("can't open output file");
-        fread(par->v, sizeof(float) * nzx, 1, fd);
+        fwrite(par->v, sizeof(float) * nzx, 1, fd);
         fclose(fd);
     }
+    fclose(Fobj);
     return 0;
 }

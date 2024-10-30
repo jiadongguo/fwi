@@ -1,4 +1,4 @@
-CC = mpicc
+CC = gcc
 CFLAGS = -g -Wall
 BIN = ../bin
 LIB =  -lm -fopenmp -lpthread -lopenblas
