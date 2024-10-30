@@ -61,6 +61,20 @@
 #ifndef NINT
 #define NINT(x) ((int)((x) > 0.0 ? (x) + 0.5 : (x) - 0.5))
 #endif
+
+#ifndef SUB2ID
+#define SUB2ID(i1, i2, n1) ((i2) * (n1)) + (i1)
+#endif
+#ifndef SUB2ID
+#define SUB2ID(i1, i2, n1, id) \
+    do                         \
+    {                          \
+        i1 = id % n1;          \
+        i2 = id / n1;          \
+    } while (0)
+
+#endif
+
 /* complex data type */
 typedef float cpx[2];
 typedef double zpx[2];
@@ -208,4 +222,6 @@ void saxpy(int n, float alpha, float *a, float *b);
 void transp(int m, int n, float *a, float *ta);
 void sgemm(int m, int n, int k, float *A, float *B, float *C);
 void dgemm(int m, int n, int k, double *A, double *B, double *C);
+
+float laplace(float *p, int n1, int n2, int i1, int i2, float d1, float d2);
 #endif

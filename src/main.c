@@ -267,11 +267,12 @@ int main(int argc, char **argv)
     acpar par = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vel);
     int nzxb = par->nzxb, nzb = par->nzb, nxb = par->nxb, nzx = par->nzx;
     lap = alloc1float(nzx * nt);
-    float *p0, *p1, *p2;
+    float *p0, *p1, *p2, *illum;
     p0 = alloc1float(nzxb);
     p1 = alloc1float(nzxb);
     p2 = alloc1float(nzxb);
     grad = alloc1float(nzx);
+    illum = alloc1float(nzx);
     clock_t start, finish;
     double num1, num2;
     /*====================================================================================================================*/
@@ -284,6 +285,7 @@ int main(int argc, char **argv)
         }
         float obj = 0;
         memset(grad, 0, sizeof(float) * nzx);
+        memset(illum, 0, sizeof(float) * nzx);
         eal_init(par, 1e-3, 0);
         for (int is = 0; is < ns; is++)
         {
@@ -296,6 +298,16 @@ int main(int argc, char **argv)
             fun_addsrc(false, par, wt[0], p1, is);
             fun_record(par, p1, dcal + is * nr * nt + 0 * nr);
             tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
+            /*==============================illum===============================================*/
+            for (int ix = 0; ix < nx; ix++)
+            {
+                for (int iz = 0; iz < nz; iz++)
+                {
+                    illum[ix * nz + iz] += pow(p1[(ix + lft) * nzb + iz + top], 2);
+                }
+            }
+
+            /*==================================================================================*/
             for (int it = 1; it < nt; it++)
             {
                 if (verb)
@@ -309,6 +321,13 @@ int main(int argc, char **argv)
                 for (int ig = 0; ig < nr; ig++)
                 {
                     obj += pow(dcal[is * nr * nt + it * nr + ig] - dobs[is * nr * nt + it * nr + ig], 2);
+                }
+                for (int ix = 0; ix < nx; ix++)
+                {
+                    for (int iz = 0; iz < nz; iz++)
+                    {
+                        illum[ix * nz + iz] += pow(p1[(ix + lft) * nzb + iz + top], 2);
+                    }
                 }
             }
 
@@ -341,7 +360,7 @@ int main(int argc, char **argv)
                 {
                     for (int iz = cut; iz < nz; iz++)
                     {
-                        grad[ix * nz + iz] += 2 * lap[it * nz * nx + ix * nz + iz] * p1[(ix + lft) * nzb + iz + top] / vel[ix * nz + iz];
+                        grad[ix * nz + iz] += 2 * lap[it * nz * nx + ix * nz + iz] * p1[(ix + lft) * nzb + iz + top] / vel[ix * nz + iz]/(illum[ix*nz+iz]+EPS);
                     }
                 }
             }

@@ -5,8 +5,7 @@ acpar creat_acpar(const int nz, const int nx,
                   const int top, const int bot, const int lft, const int rht,
                   const int nt, const float dt,
                   int ns, const int sz, const int sx, const int jsx, const int jsz,
-                  int nr, const int rz, const int rx, const int jrx, const int jrz,
-                  float *vel)
+                  int nr, const int rz, const int rx, const int jrx, const int jrz)
 {
     acpar ac = alloc1(1, sizeof(*ac));
     /*computation area dimension*/
@@ -20,8 +19,5 @@ acpar creat_acpar(const int nz, const int nx,
     ac->sz = sz, ac->sx = sx, ac->jsx = jsx, ac->jsz = jsz, ac->ns = ns;
     /*receiver*/
     ac->rz = rz, ac->rx = rx, ac->jrx = jrx, ac->jrz = jrz, ac->nr = nr;
-    /*velocity model*/
-    ac->v = vel, ac->vv = alloc1float(ac->nzxb);
-    pad2(ac->v, ac->vv, nz, nx, lft, rht, top, bot);
     return ac;
 }

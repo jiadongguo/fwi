@@ -13,8 +13,6 @@ typedef struct acpar
     /*recorde time and wavelet*/
     int nt;
     float dt;
-    /*velocity model*/
-    float *v, *vv;
     /*source*/
     int sz, sx /*start form 0*/, jsx, jsz, ns;
     /*receiver*/
@@ -25,6 +23,5 @@ acpar creat_acpar(const int nz, const int nx,
                   const int top, const int bot, const int lft, const int rht,
                   const int nt, const float dt,
                   int ns, const int sz, const int sx, const int jsx, const int jsz,
-                  int nr, const int rz, const int rx, const int jrx, const int jrz,
-                  float *vel);
+                  int nr, const int rz, const int rx, const int jrx, const int jrz);
 #endif
