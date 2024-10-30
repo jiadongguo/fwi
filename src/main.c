@@ -7,19 +7,19 @@ a simple program for fwi
 
 /* ======================================================================================
 
-laplace : laplace opeprator
-forward : Seismic waves travel forward
-backward : Seismic waves travel backward
-obj : objective function of fwi
-record :
-gradient : gradient of current model
+fun_laplace : laplace opeprator
+fun_forward : Seismic waves travel forward
+fun_backward : Seismic waves travel backward
+fun_obj : objective function of fwi
+fun_record :
+fun_gradient : gradient of current model
 
 ===========================================================================================*/
 
 void eal_init(acpar par, float alpha_, int mode);
 void eal_apply(acpar par, float *pre, float *curr, float *next);
 void eal_close();
-float laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2)
+float fun_laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2)
 {
     static float c0 = -5. / 2, c1 = 4. / 3, c2 = -1. / 12;
     float fdx[5], fdz[5];
@@ -36,7 +36,7 @@ float laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2)
     return lapx + lapz;
 }
 
-void fun_forward(acpar par, float *pre, float *curr, float *next)
+void fun_forward(acpar par, float *pre, float *curr, float *next, float *lap)
 {
     float *vv;
     int nz, nx, nzb, nxb, top, lft;
@@ -52,11 +52,17 @@ void fun_forward(acpar par, float *pre, float *curr, float *next)
     dt = par->dt;
     vv = par->vv;
     /*only for inner grid*/
+    float tmp;
     for (int ix = lft; ix < lft + nx; ix++)
     {
         for (int iz = top; iz < top + nz; iz++)
         {
-            next[ix * nzb + iz] = laplace(nzb, nxb, iz, ix, curr, dz, dx) * (vv[ix * nzb + iz] * dt) * (vv[ix * nzb + iz] * dt) + 2 * curr[ix * nzb + iz] - pre[ix * nzb + iz];
+            tmp = laplace(nzb, nxb, iz, ix, curr, dz, dx);
+            if (lap != NULL)
+            {
+                lap[(ix - lft) * nz + (iz - top)] = tmp;
+            }
+            next[ix * nzb + iz] = tmp * (vv[ix * nzb + iz] * dt) * (vv[ix * nzb + iz] * dt) + 2 * curr[ix * nzb + iz] - pre[ix * nzb + iz];
         }
     }
     eal_apply(par, pre, curr, next);
@@ -87,24 +93,6 @@ void fun_backward(acpar par, float *pre, float *curr, float *next)
     }
     eal_apply(par, pre, curr, next);
 }
-float fun_obj(acpar par, float *wt)
-{
-    float obj = 0;
-}
-
-void fun_gradient(float *g /* backward wavefield */, float *lap, int it, acpar par, float *grad)
-{
-    int nx = par->nx, nz = par->nz;
-    int nzb = par->nzb, lft = par->lft, top = par->top;
-    float *v = par->v;
-    for (int ix = 0; ix < nx; ix++)
-    {
-        for (int iz = 0; iz < nz; iz++)
-        {
-            grad[ix * nz + iz] += g[(ix + lft) * nzb + iz + top] * lap[it * nz * nx + ix * nz + iz] / pow(v[ix * nz + iz], 2);
-        }
-    }
-}
 void fun_record(acpar par, float *curr, float *rcd)
 {
     int nr = par->nr, nzb = par->nzb;
@@ -116,8 +104,32 @@ void fun_record(acpar par, float *curr, float *rcd)
         rcd[ir] = curr[rx * nzb + rz];
     }
 }
-float fun_alphatest(int n, acpar par, float *grad)
+void fun_addsrc(bool adj, acpar par, float wt, float *p, int is /* is or ir */)
 {
+    int nzb = par->nzb;
+    int lft = par->lft, top = par->top;
+    int jsx, jsz, sx, sz;
+    if (adj)
+    {
+        sx = par->rx;
+        sz = par->rz;
+        jsx = par->jrx;
+        jsz = par->jrz;
+    }
+    else
+    {
+        sx = par->sx;
+        sz = par->sz;
+        jsx = par->jsx;
+        jsz = par->jsz;
+    }
+    sx = sx + lft + is * jsx;
+    sz = sz + top + is * jsz;
+    p[sx * nzb + sz] += wt;
+}
+float fun_alphatest(acpar par, float *grad)
+{
+    int n = par->nzx;
     float *v = par->v;
     float maxv = 0, maxg = 0;
     for (int i = 0; i < n; i++)
@@ -127,17 +139,7 @@ float fun_alphatest(int n, acpar par, float *grad)
     }
     return 0.01 * maxv / maxg;
 }
-float fun_update(acpar par, float alpha, float *grad)
-{
-    int nzx = par->nzx;
-    int nz = par->nz, nx = par->nx, lft = par->lft, rht = par->rht, top = par->top, bot = par->bot;
-    float *v = par->v, *vv = par->vv;
-    for (int i = 0; i < nzx; i++)
-    {
-        v[i] = v[i] - alpha * grad[i];
-    }
-    pad2(v, vv, nz, nx, lft, rht, top, bot);
-}
+
 int main(int argc, char **argv)
 {
     initargs(argc, argv);
@@ -147,8 +149,9 @@ int main(int argc, char **argv)
     int ns, sz, sx, jsx, jsz, rz, rx, jrx, jrz, nr;
     float dz, dx, dt;
     float *wt /* wavelet */, *vel /* initial velocity model */;
-    float *vtmp, *vtmppad;
+    float *vtmp;
     bool verb;
+    int cut;
     if (!getparbool("verb", &verb))
         verb = false;
     if (!getparint("nter", &nter))
@@ -157,6 +160,11 @@ int main(int argc, char **argv)
     }
     if (!getparint("n1", &nz))
         err("need nz");
+    if (!getparint("cut", &cut))
+    {
+        cut = 10;
+        warn("set cut=10");
+    }
     if (!getparint("n2", &nx))
         err("need nx");
     if (!getparint("nt", &nt))
@@ -198,7 +206,7 @@ int main(int argc, char **argv)
     if (!getparstring("shots", &shots))
         err("need shots for observed seismogram");
     if (!getparstring("vpfile", &fvel))
-        err("need vp");
+        err("need fvel");
     if (!getparstring("wtfile", &fwt))
         err("need fwt");
     if (!getparstring("out", &out))
@@ -208,59 +216,105 @@ int main(int argc, char **argv)
     if ((rx + (nr - 1) * jrx >= nx) || (rz + (nr - 1) * jrz >= nz))
         err("receiver position outer bound");
     /* ===================================================================================================== */
-    acpar par = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vel);
 
-    FILE *fshots = fopen(shots, "rb");
     FILE *fout = fopen(out, "wb");
-    int nzxb = par->nzxb, nzb = par->nzb, nxb = par->nxb, nzx = par->nzx;
-    float *p0 = alloc1float(par->nzxb);
-    float *p1 = alloc1float(par->nzxb);
-    float *p2 = alloc1float(par->nzxb);
-    float *grad = alloc1float(par->nzx);
-    float *tmp, *dobs, *dtobs, *lap, *derr, *dcal;
+    float alpha;
+    float *tmp, *dobs, *lap, *derr, *dcal, *grad, *dcaltmp;
     wt = alloc1float(nt);
-    dtobs = alloc1float(nt * nr);
-    dobs = alloc1float(nt * nr);
-    dcal = alloc1float(nt * nr);
-    derr = alloc1float(nt * nr);
-    lap = alloc1float(nzx);
-    vtmp = alloc1float(nzx);
-    memcpy(vtmp, vel, sizeof(float) * nzx);
-    acpar partmp = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vtmp); /* test model */
-    eal_init(par, 1e-3, 0);
-    for (int iter = 0; iter < nter; iter++)
     {
-        float obj = 0;
-        memset(grad, 0, sizeof(float) * nzxb);
-        /*read observed seismogram*/
-        fseek(fshots, 0, SEEK_SET);
-        /* forward modeling */
+        FILE *fd = fopen(fwt, "rb");
+        if (fd == NULL)
+            err("can't open wavelet file");
+        fread(wt, sizeof(float) * nt, 1, fd);
+        fclose(fd);
+    }
+    vel = alloc1float(nz * nx);
+    {
+        FILE *fd = fopen(fvel, "rb");
+        if (fd == NULL)
+            err("can't open initial velocity file");
+        fread(vel, sizeof(float) * nz * nx, 1, fd);
+        fclose(fd);
+    }
+    vtmp = alloc1float(nz * nx);
+    memcpy(vtmp, vel, sizeof(float) * nz * nx);
+    dobs = alloc1float(nt * nr * ns);
+    {
+        FILE *fd = fopen(shots, "rb");
+        if (fd == NULL)
+            err("can't open shots file");
+        fread(dobs, sizeof(float) * nr * nt * ns, 1, fd);
+        fclose(fd);
+    }
+    /*========================================transpose for observed seismogram =================================================*/
+    {
+        float *dtobs = alloc1float(nt * nr);
         for (int is = 0; is < ns; is++)
         {
-            fread(dtobs, sizeof(float) * nr * nt, 1, fshots);
-            transp(nt, nr, dtobs, dobs);
+            transp(nt, nr, &dobs[is * nr * nt], dtobs);
+            memcpy(dtobs, &dobs[is * nr * nt], sizeof(float) * nr * nt);
+        }
+        free1(dtobs);
+    }
+    /*=========================================================================================*/
+    dcal = alloc1float(nt * nr * ns);
+    dcaltmp = alloc1float(nr);
+
+    /* ======================================================observation system definition======================================================================================================= */
+    acpar partmp = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vtmp); /* test model */
+    acpar par = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vel);
+    acpar partmp = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vtmp);
+    int nzxb = par->nzxb, nzb = par->nzb, nxb = par->nxb, nzx = par->nzx;
+    lap = alloc1float(nzx);
+    float *p0, *p1, *p2;
+    p0 = alloc1float(nzxb);
+    p1 = alloc1float(nzxb);
+    p2 = alloc1float(nzxb);
+    grad = alloc1float(nzx);
+    clock_t start, finish;
+    double num1, num2;
+    /*====================================================================================================================*/
+    for (int iter = 0; iter < nter; iter++)
+    {
+        if (verb)
+        {
+            start = clock();
+        }
+        float obj = 0;
+        memset(grad, 0, sizeof(float) * nzxb);
+        eal_init(par, 1e-3, 0);
+        for (int is = 0; is < ns; is++)
+        {
             memset(p0, 0, sizeof(float) * nzxb);
             memset(p1, 0, sizeof(float) * nzxb);
             memset(p2, 0, sizeof(float) * nzxb);
-            int sx = lft + jsx * is, sz = top + jsz * is;
-            sx = sx * nzb + sz;
-            for (int it = 0; it < nt; it++)
+            /* ====================================forward modeling ===========================*/
+            fun_forward(par, p0, p1, p2, NULL);
+            fun_addsrc(false, par, wt[0], p1, is);
+            fun_record(par, p1, dcal + is * nr * nt + 0 * nr);
+            tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
+            for (int it = 1; it < nt; it++)
             {
-                fun_forward(par, p0, p1, p2);
+
+                fun_forward(par, p0, p1, p2, lap + (it - 1) * nz * nx);
+
                 tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
-                p1[sx] += wt[it];
-                for (int ix = 0; ix < nx; ix++)
+                fun_addsrc(false, par, wt[it], p1, is);
+                fun_record(par, p1, dcal + is * nr * nt + it * nr);
+                for (int ig = 0; ig < nr; ig++)
                 {
-                    for (int iz = 0; iz < nz; iz++)
-                    {
-                        lap[it * nz * nx + ix * nz + iz] = laplace(nzb, nxb, iz + top, ix + lft, p1, dz, dx);
-                    }
+                    obj += pow(dcal[it * nr + ig], 2);
                 }
-                fun_record(par, p1, dcal + it * nr);
-                /* calculate wavefield residuals and  objective value */
-                obj += fun_obj(dcal, dobs, derr + it * nr, nr);
             }
-            /* calculate gradient */
+            for (int ix = 0; ix < nx; ix++)
+            {
+                for (int iz = 0; iz < nz; iz++)
+                {
+                    lap[ix * nz + iz] = fun_laplace(nzb, nxb, ix + lft, iz + top, p1, dz, dx);
+                }
+            }
+            /* ==========================================================================================*/
+            /* ===========================================backward imaging ===============================================*/
             memset(p0, 0, sizeof(float) * nzxb);
             memset(p1, 0, sizeof(float) * nzxb);
             memset(p2, 0, sizeof(float) * nzxb);
@@ -270,18 +324,65 @@ int main(int argc, char **argv)
                 tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
                 for (int ir = 0; ir < nr; ir++)
                 {
-                    p1[(rx + lft + jrx * ir) * nzb + top + jrz * ir + rz] += derr[ir * nt + it];
+                    fun_addsrc(true, par, dcal[is * nr * nt + it * nr + ir] - dobs[is * nr * nt + it * nr + ir], p1, ir);
                 }
-                fun_gradient(p1, lap, it, par, grad);
+                for (int ix = 0; ix < nx; ix++)
+                {
+                    for (int iz = cut; iz < nz; iz++)
+                    {
+                        grad[ix * nz + iz] += 2 * lap[it * nz * nx + ix * nz + iz] * p1[(ix + lft) * nzb + iz + top] / vel[ix * nz + iz];
+                    }
+                }
             }
         }
-        /* update velocity model */
-        /* test model */
-        float alphatest = fun_alphatest(nzx, par, grad);
-        memcpy(vtmp, vel, sizeof(float) * nzx);
-        fun_update(partmp, alphatest, grad);
-        pad2(vtmp, partmp->vv, nz, nx, lft, rht, top, bot);
+        eal_close();
+        /* ==========================================================================================*/
+
+        /*====================================== test model ===========================================*/
+        /* test step length */
+        float alpha_test = fun_alphatest(par, grad);
+        /* forward modeling for tmp model */
+        for (int ix = 0; ix < nzx; ix++)
+        {
+            partmp->v[ix] = par->v[ix] - alpha_test * grad[ix];
+        }
+        pad2(partmp->v, partmp->vv, nz, nx, lft, rht, top, bot);
+        eal_init(partmp, 1e-3, 0);
+        num1 = 0;
+        num2 = 0;
+        for (int is = 0; is < ns; is++)
+        {
+            memset(p0, 0, sizeof(float) * nzxb);
+            memset(p1, 0, sizeof(float) * nzxb);
+            memset(p2, 0, sizeof(float) * nzxb);
+            for (int it = 0; it < nt; it++)
+            {
+                fun_forward(partmp, p0, p1, p2, NULL);
+                tmp = p0, p0 = p1, p1 = p2, p2 = tmp;
+                fun_addsrc(false, partmp, wt[it], p1, is);
+                fun_record(partmp, p1, dcaltmp);
+                for (int ir = 0; ir < nr; ir++)
+                {
+                    num1 += (dcaltmp[ir] - dcal[is * nr * nt + it * nr + ir]) * (dcal[is * nr * nt + it * nr + ir] - dobs[is * nr * nt + it * nr + ir]);
+                    num2 += dcaltmp[ir] * dcaltmp[ir];
+                }
+            }
+        }
+        eal_close();
+        /*==============================================================================================================*/
+        alpha = -alpha_test * num1 / num2;
+        for (int ix = 0; ix < nzx; ix++)
+        {
+            par->v[ix] -= alpha * grad[ix];
+        }
+        pad2(par->v, par->vv, nz, nx, lft, rht, top, bot);
+
+        if (verb)
+        {
+            finish = clock();
+            warn("costtime=%.4f,iter=%d,obj=%d", 1. * (finish - start) / CLOCKS_PER_SEC, iter, obj);
+        }
     }
-    eal_close();
+
     return 0;
 }
