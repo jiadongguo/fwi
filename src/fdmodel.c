@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     int ns, sz, sx, jsx, jsz, rz, rx, jrx, jrz, nr;
     float dz, dx, dt;
     char *fwt, *fvel, *out;
-    float *wt, *vel;
+    float *wt, *vel, *vv;
     int mode;
     if (!getparint("mode", &mode))
     {
@@ -95,6 +95,8 @@ int main(int argc, char **argv)
         fclose(fd);
     }
     acpar par = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz);
+
+    printf("ojk\n");
     int ns0 = ns;
     int nzb, nxb, nzxb;
     float *pre, *curr, *next, *tmp;

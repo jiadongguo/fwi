@@ -55,7 +55,7 @@ ricker n1=$nt d1=$dt fm=$fm amp=$amp t0=$t0 out=$wt
 # 制作观测地震记录
 mpirun -np $nodes fdmodel n1=$nz n2=$nx nt=$nt dt=$dt top=$top bot=$bot lft=$lft rht=$rht ns=$ns nr=$nr sz=$sz \
         sx=$sx jsx=$jsx jsz=$jsz rx=$rx rz=$rz jrx=$jrx jrz=$jrz d1=$dz d2=$dx vpfile=$vp \
-        wtfile=$wt out=$dobs
+        wtfile=$wt out=$dobs mode=1
 exit
 # 目标函数文件
 fobj="obj.txt"
@@ -81,7 +81,7 @@ do
     veltest="${prefix}/veltest$i${suffix}"
 # 正演计算dcal
 # 计算目标函数
-    fwi_obj ns=$ns nt=$nt ng=$nr out=$fobj fcal=$dcal fobs=$dobs
+    fwi_obj ns=$ns nt=$nt ng=$nr out=$fobj fcal=$dcal fobs=$dobs 
 # 计算负梯度
 # 计算测试模型
 # 计算测试模型dcal
