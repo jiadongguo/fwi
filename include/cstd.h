@@ -223,5 +223,7 @@ void transp(int m, int n, float *a, float *ta);
 void sgemm(int m, int n, int k, float *A, float *B, float *C);
 void dgemm(int m, int n, int k, double *A, double *B, double *C);
 
-float laplace(float *p, int n1, int n2, int i1, int i2, float d1, float d2);
+
+FILE *input(char *s);
+FILE *output(char *s);
 #endif

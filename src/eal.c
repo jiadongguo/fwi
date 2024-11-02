@@ -3,6 +3,8 @@
 static float *d;    /* absorbing coefficient */
 static float alpha; /*theoretical reflection coefficient*/
 static int mode;
+float laplace(float *p, int n1, int n2, int i1, int i2, float d1, float d2);
+
 void eal_init(acpar par, float alpha_, int mode_, float *vv_)
 {
     alpha = 1. / alpha_;
@@ -203,7 +205,7 @@ void eal_apply(acpar par, float *pre, float *curr, float *next, float *vv_)
                 continue;
             /* absorbing area */
             tmp = 1. / (d[ix * nzb + iz] * dt + 1);
-            lap = laplace(nzb, nxb, iz, ix, curr, dz, dx);
+            lap = laplace(curr, nzb, nxb, iz, ix, dz, dx);
             next[ix * nzb + iz] = (d[ix * nzb + iz] * dt - 1) * tmp * pre[ix * nzb + iz] + (2 - pow(d[ix * nzb + iz] * dt, 2)) * tmp * curr[ix * nzb + iz] + pow(vv[ix * nzb + iz] * dt, 2) * tmp * lap;
         }
     }

@@ -1,5 +1,6 @@
 {
   "files.associations": {
-    "waveutils.h": "c"
+    "waveutils.h": "c",
+    "mpi.h": "c"
   }
 }

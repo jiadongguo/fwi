@@ -1,17 +1,21 @@
-CC = gcc
+CC = mpicc
 CFLAGS = -g -Wall
 BIN = ../bin
 LIB =  -lm -fopenmp -lpthread -lopenblas
+
+LIBS = eal.c fdutils.c cstd.c waveutils.c
 INC = -I../include
-SRC = $(wildcard *.c)
 OBJ = $(SRC:.c=.o)
 
-all: clean fwi smooth
-
+all: clean fwi smooth ricker
+fwi_obj:fwi_obj.c $(LIBS)
+	gcc $(CFLAGS) -o $(BIN)/fwi_obj $(INC) $^ $(LIB)
+ricker:ricker.c ${LIBS}
+	$(CC) $(CFLAGS) -o $(BIN)/ricker $(INC) $^ $(LIB)
 smooth:
 	$(CC) $(CFLAGS) -o $(BIN)/smooth $(INC) cstd.c smooth.c $(LIB)
-fwi:
-	$(CC) $(CFLAGS) -o $(BIN)/fwi $(INC) cstd.c eal.c waveutils.c main.c $(LIB)
+fdmodel:fdmodel.c ${LIBS}
+	mpicc $(CFLAGS) -o $(BIN)/fdmodel $(INC) $^ $(LIB)
 
 clean:
 	find . -name "*.o"   -exec rm {} \;

@@ -1,5 +1,4 @@
 #include "cstd.h"
-
 /* allocate a 1-d array */
 void *alloc1(size_t n1, size_t size)
 {
@@ -1463,11 +1462,27 @@ void saxpy(int n, float alpha, float *a, float *b)
 /* blas3 */
 void transp(int m, int n, float *a, float *ta)
 {
-    for (int i = 0; i < m; i++)
+    if (ta == NULL || ta == a)
     {
-        for (int j = 0; j < n; j++)
+        float *tmp = alloc1float(m * n);
+        for (int i = 0; i < m; i++)
         {
-            ta[i * n + j] = a[j * m + i];
+            for (int j = 0; j < n; j++)
+            {
+                tmp[i * n + j] = a[j * m + i];
+            }
+        }
+        memcpy(a, tmp, sizeof(float) * m * n);
+        free1float(tmp);
+    }
+    else
+    {
+        for (int i = 0; i < m; i++)
+        {
+            for (int j = 0; j < n; j++)
+            {
+                ta[i * n + j] = a[j * m + i];
+            }
         }
     }
 }
@@ -1479,21 +1494,17 @@ void dgemm(int m, int n, int k, double *A, double *B, double *C)
 {
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1, A, m, B, k, 0, C, m);
 }
-
-/* Laplace filter */
-float laplace(float *p, int n1, int n2, int i1, int i2, float d1, float d2)
+FILE *input(char *s)
 {
-    static float c0 = -5. / 2, c1 = 4. / 3, c2 = -1. / 12;
-    float fdx[5], fdz[5];
-    float lapz, lapx;
-    d1 = 1. / pow(d1, 2);
-    d2 = 1. / pow(d2, 2);
-    for (int i = 0; i < 5; i++)
-    {
-        fdx[i] = ((i2 + i - 2 < 0) || (i2 + i - 2 >= n2)) ? 0 : p[(i2 + i - 2) * n1 + i1];
-        fdz[i] = ((i1 + i - 2 < 0) || (i1 + i - 2 >= n1)) ? 0 : p[i2 * n1 + i1 + i - 2];
-    }
-    lapz = (c2 * (fdz[0] + fdz[4]) + c1 * (fdz[1] + fdz[3]) + c0 * fdz[2]) * d1;
-    lapx = (c2 * (fdx[0] + fdx[4]) + c1 * (fdx[1] + fdx[3]) + c0 * fdx[2]) * d2;
-    return lapx + lapz;
+    FILE *fd = fopen(s, "rb");
+    if (fd == NULL)
+        err("can't open %s", s);
+    return fd;
+}
+FILE *output(char *s)
+{
+    FILE *fd = fopen(s, "wb");
+    if (fd == NULL)
+        err("can't open %s", s);
+    return fd;
 }
