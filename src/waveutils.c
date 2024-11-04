@@ -21,26 +21,3 @@ acpar creat_acpar(const int nz, const int nx,
     ac->rz = rz, ac->rx = rx, ac->jrx = jrx, ac->jrz = jrz, ac->nr = nr;
     return ac;
 }
-void record(acpar par, float *p, float *rcd)
-{
-    int nzb = par->nzb;
-    int nr = par->nr;
-    int top = par->top, lft = par->lft;
-    int jrx = par->jrx, jrz = par->jrz;
-    int rx = par->rx + lft, rz = par->rz + top;
-    for (int ir = 0; ir < nr; ir++)
-    {
-        rcd[ir] = p[(rx + ir * jrx) * nzb + (rz + ir * jrz)];
-    }
-}
-void add_src(acpar par, float *p, float wt, int is)
-{
-    int nzb = par->nzb;
-    int top = par->top, lft = par->lft;
-    int jsx = par->jsx, jsz = par->jsz;
-    int sx = par->sx + lft, sz = par->sz + top;
-    sx += is * jsx;
-    sz += is * jsz;
-
-    p[sx * nzb + sz] += wt;
-}

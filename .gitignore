@@ -1,5 +1,6 @@
 *.o
+*.out
 *.txt
 *.dat
 *.
-*.gpl
+bin/**

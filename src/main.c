@@ -50,7 +50,6 @@ void fun_forward(acpar par, float *pre, float *curr, float *next, float *lap)
     dz = par->dz;
     dx = par->dx;
     dt = par->dt;
-    vv = par->vv;
     /*only for inner grid*/
     float tmp;
     for (int ix = lft; ix < lft + nx; ix++)
@@ -81,7 +80,6 @@ void fun_backward(acpar par, float *pre, float *curr, float *next)
     dz = par->dz;
     dx = par->dx;
     dt = par->dt;
-    vv = par->vv;
     /*only for inner grid*/
     for (int ix = lft; ix < lft + nx; ix++)
     {
@@ -129,7 +127,6 @@ void fun_addsrc(bool adj, acpar par, float wt, float *p, int is /* is or ir */)
 float fun_alphatest(acpar par, float *grad)
 {
     int n = par->nzx;
-    float *v = par->v;
     float maxv = 0, maxg = 0;
     for (int i = 0; i < n; i++)
     {
@@ -259,8 +256,8 @@ int main(int argc, char **argv)
         free1(dtobs);
     }
     /*=========================================================================================*/
-    dcal = alloc1float(nt * nr * ns);
-    dcaltmp = alloc1float(nr);
+    dcal = alloc1float(nt * nr);
+    dcaltmp = alloc1float(nr * nt);
 
     /* ======================================================observation system definition======================================================================================================= */
     acpar partmp = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz, vtmp); /* test model */
@@ -360,7 +357,7 @@ int main(int argc, char **argv)
                 {
                     for (int iz = cut; iz < nz; iz++)
                     {
-                        grad[ix * nz + iz] += 2 * lap[it * nz * nx + ix * nz + iz] * p1[(ix + lft) * nzb + iz + top] / vel[ix * nz + iz]/(illum[ix*nz+iz]+EPS);
+                        grad[ix * nz + iz] += 2 * lap[it * nz * nx + ix * nz + iz] * p1[(ix + lft) * nzb + iz + top] / vel[ix * nz + iz] / (illum[ix * nz + iz] + EPS);
                     }
                 }
             }

@@ -3,13 +3,34 @@ seismic wavefield modeling with effective absorbing layer
 */
 #include "cstd.h"
 #include "waveutils.h"
-#include "fdutils.h"
 #include <mpi/mpi.h>
-
-void eal_init(acpar par, float alpha_, int mode_, float *vv_);
-void eal_apply(acpar par, float *pre, float *curr, float *next, float *vv_);
+float laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2);
+void eal_init(acpar par, float alpha_, int mode_, float *vv);
+void eal_apply(acpar par, float *pre, float *curr, float *next, float *vv);
 void eal_close();
-
+void fdfor(acpar par, float *pre, float *curr, float *next, float *vv)
+{
+    int nz, nx, nzb, nxb, top, lft;
+    float dz, dx, dt;
+    nz = par->nz;
+    nx = par->nx;
+    nzb = par->nzb;
+    nxb = par->nxb;
+    top = par->top;
+    lft = par->lft;
+    dz = par->dz;
+    dx = par->dx;
+    dt = par->dt;
+    /*only for inner grid*/
+    for (int ix = lft; ix < lft + nx; ix++)
+    {
+        for (int iz = top; iz < top + nz; iz++)
+        {
+            next[ix * nzb + iz] = laplace(nzb, nxb, iz, ix, curr, dz, dx) * (vv[ix * nzb + iz] * dt) * (vv[ix * nzb + iz] * dt) + 2 * curr[ix * nzb + iz] - pre[ix * nzb + iz];
+        }
+    }
+    eal_apply(par, pre, curr, next, vv);
+}
 int main(int argc, char **argv)
 {
     initargs(argc, argv);
@@ -17,12 +38,15 @@ int main(int argc, char **argv)
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
+    bool verb;
     int nz, nx, nt, top, bot, lft, rht;
     int ns, sz, sx, jsx, jsz, rz, rx, jrx, jrz, nr;
     float dz, dx, dt;
     char *fwt, *fvel, *out;
-    float *wt, *vel, *vv;
+    float *wt, *vel;
     int mode;
+    if (!getparbool("verb", &verb))
+        verb = true;
     if (!getparint("mode", &mode))
     {
         mode = 0;
@@ -79,52 +103,45 @@ int main(int argc, char **argv)
     if ((rx + (nr - 1) * jrx >= nx) || (rz + (nr - 1) * jrz >= nz))
         err("receiver position outer bound");
     /*--------------------------------------------------------------------------------------------------------------*/
-
     vel = alloc1float(nz * nx);
     wt = alloc1float(nt);
     /*-----------------------------------------------read velocity model--------------------------------------------*/
     {
-        FILE *fd = input(fvel);
+        FILE *fd = fopen(fvel, "rb");
         fread(vel, sizeof(float) * nz * nx, 1, fd);
         fclose(fd);
     }
     /*-----------------------------------------------read wavelet--------------------------------------------*/
     {
-        FILE *fd = input(fwt);
+        FILE *fd = fopen(fwt, "rb");
         fread(wt, sizeof(float) * nt, 1, fd);
         fclose(fd);
     }
-    acpar par = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz);
 
-    printf("ojk\n");
+    acpar par = creat_acpar(nz, nx, dz, dx, top, bot, lft, rht, nt, dt, ns, sz, sx, jsx, jsz, nr, rz, rx, jrx, jrz);
     int ns0 = ns;
     int nzb, nxb, nzxb;
     float *pre, *curr, *next, *tmp;
-    float *rcd, *seis;
-    FILE *fd;
+    float *rcd;
     nzb = par->nzb, nxb = par->nxb, nzxb = nzb * nxb;
-
     pre = alloc1float(nzxb);
     curr = alloc1float(nzxb);
     next = alloc1float(nzxb);
     rcd = alloc1float(nr * nt);
-
     if (ns % size != 0)
     {
         ns += size - ns % size;
     }
 
-    if (rank == 0)
-    {
-        fd = output(out);
-        seis = alloc1float(size * nr * nt);
-    }
-
-    float *vpd = alloc1float(nzb * nxb);
-    pad2(vel, vpd, nz, nx, lft, rht, top, bot);
-    eal_init(par, 1e-4, mode, vpd);
+    int is_x, is_z, ir_x, ir_z;
+    float *vv = alloc1float(nzxb);
+    pad2(vel, vv, nz, nx, lft, rht, top, bot);
+    MPI_File fh;
+    MPI_Status status;
+    MPI_File_open(MPI_COMM_WORLD, out, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
     MPI_Barrier(MPI_COMM_WORLD);
     clock_t start = clock();
+    eal_init(par, 1e-4, mode, vv);
     for (int is = rank; is < ns; is += size)
     {
         if (is < ns0)
@@ -132,49 +149,42 @@ int main(int argc, char **argv)
             memset(pre, 0, sizeof(float) * nzxb);
             memset(curr, 0, sizeof(float) * nzxb);
             memset(next, 0, sizeof(float) * nzxb);
+            is_x = lft + sx + (is - 1) * jsx, is_z = top + sz + (is - 1) * jsz;
             for (int it = 0; it < nt; it++)
             {
-                if (it % 100 == 0)
+                if (verb && it % 100 == 0)
                 {
                     printf("forward modeling is=%d/%d,it=%d/%d\n", is + 1, ns0, it + 1, nt);
                 }
-                step_forward(par, pre, curr, next, vpd);
+                fdfor(par, pre, curr, next, vv);
                 tmp = pre, pre = curr, curr = next, next = tmp;
-                add_src(par, curr, wt[it], is);
-                record(par, curr, rcd + it * nr);
+                curr[is_x * nzb + is_z] += wt[it];
+                for (int ir = 0; ir < nr; ir++)
+                {
+                    ir_x = lft + rx + (ir - 1) * jrx, ir_z = top + rz + (ir - 1) * jrz;
+                    rcd[ir * nt + it] = curr[ir_x * nzb + ir_z];
+                }
             }
-            transp(nr, nt, rcd, NULL);
+
+            MPI_File_write_at(fh, is * sizeof(float) * nt * nr, rcd, nt * nr, MPI_FLOAT, &status);
         }
         MPI_Barrier(MPI_COMM_WORLD);
-        MPI_Gather(rcd, nr * nt, MPI_FLOAT, seis, nr * nt, MPI_FLOAT, 0, MPI_COMM_WORLD);
-        if (rank == 0)
-        {
-            if (is + size >= ns0)
-            {
-                fwrite(seis, sizeof(float), (ns0 - is) * nr * nt, fd);
-            }
-            else
-            {
-                fwrite(seis, sizeof(float), nr * nt * size, fd);
-            }
-        }
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+    // MPI_Barrier(MPI_COMM_WORLD);
     clock_t finish = clock();
     if (rank == 0)
     {
         printf("Forward modeling costs time %.4fs\n", 1. * (finish - start) / CLOCKS_PER_SEC);
-        free1float(seis);
-        fclose(fd);
     }
     eal_close();
-    free1float(rcd);
-    free1float(pre);
-    free1float(curr);
-    free1float(next);
-    free1float(wt);
-    free1float(vel);
-    free(par);
+    free1(rcd);
+    free(pre);
+    free(curr);
+    free(next);
+    free1(wt);
+    free1(vel);
+    free1(vv);
+    free1(par);
     MPI_Finalize();
     return 0;
 }

@@ -1,4 +1,5 @@
 #include "cstd.h"
+
 /* allocate a 1-d array */
 void *alloc1(size_t n1, size_t size)
 {
@@ -1460,32 +1461,6 @@ void saxpy(int n, float alpha, float *a, float *b)
     cblas_saxpy(n, alpha, a, 1, b, 1);
 }
 /* blas3 */
-void transp(int m, int n, float *a, float *ta)
-{
-    if (ta == NULL || ta == a)
-    {
-        float *tmp = alloc1float(m * n);
-        for (int i = 0; i < m; i++)
-        {
-            for (int j = 0; j < n; j++)
-            {
-                tmp[i * n + j] = a[j * m + i];
-            }
-        }
-        memcpy(a, tmp, sizeof(float) * m * n);
-        free1float(tmp);
-    }
-    else
-    {
-        for (int i = 0; i < m; i++)
-        {
-            for (int j = 0; j < n; j++)
-            {
-                ta[i * n + j] = a[j * m + i];
-            }
-        }
-    }
-}
 void sgemm(int m, int n, int k, float *A, float *B, float *C)
 {
     cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1, A, m, B, k, 0, C, m);
@@ -1493,18 +1468,4 @@ void sgemm(int m, int n, int k, float *A, float *B, float *C)
 void dgemm(int m, int n, int k, double *A, double *B, double *C)
 {
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1, A, m, B, k, 0, C, m);
-}
-FILE *input(char *s)
-{
-    FILE *fd = fopen(s, "rb");
-    if (fd == NULL)
-        err("can't open %s", s);
-    return fd;
-}
-FILE *output(char *s)
-{
-    FILE *fd = fopen(s, "wb");
-    if (fd == NULL)
-        err("can't open %s", s);
-    return fd;
 }
