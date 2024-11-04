@@ -3,7 +3,7 @@ CFLAGS = -g -Wall -I../include
 BIN = ../bin
 LIB =  -lm -fopenmp -lpthread -lopenblas
 LIBS = cstd.c eal.c lap.c waveutils.c
-all: clean fdmodeling2 mkmodel fwi
+all: clean fdmodeling2 mkmodel fwi smooth ricker
 
 %:%.c $(LIBS)
 	$(CC) $(CFLAGS) -o $(BIN)/$@ $^ $(LIB)

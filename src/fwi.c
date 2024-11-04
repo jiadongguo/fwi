@@ -4,6 +4,7 @@
 void eal_init(acpar par, float alpha_, int mode_, float *vv);
 void eal_apply(acpar par, float *pre, float *curr, float *next, float *vv);
 void eal_close();
+float laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2);
 void fdfor(acpar par, float *pre, float *curr, float *next, float *vv, float *lap)
 {
     int nz, nx, nzb, nxb, top, lft;
@@ -193,10 +194,6 @@ int main(int argc, char **argv)
                 MPI_File_close(&fh);
                 MPI_Barrier(MPI_COMM_WORLD);
                 MPI_Reduce(&obj, &objsum, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
-                if (rank == 0)
-                {
-                    warn("iter=%d,obj=%g", iter + 1, objsum);
-                }
                 memset(pre, 0, sizeof(float) * nzxb);
                 memset(curr, 0, sizeof(float) * nzxb);
                 memset(next, 0, sizeof(float) * nzxb);
@@ -220,6 +217,10 @@ int main(int argc, char **argv)
             }
         }
         eal_close();
+        if (rank == 0)
+        {
+            warn("iter=%d,obj=%g", iter + 1, objsum);
+        }
         MPI_Barrier(MPI_COMM_WORLD);
         /*gradient*/
         MPI_Reduce(grad, gradient, nz * nx, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -237,6 +238,12 @@ int main(int argc, char **argv)
         {
             warn("iter%d finish cost %g seconds", iter + 1, 1. * (finish - start) / CLOCKS_PER_SEC);
         }
+    }
+    if (rank == 0)
+    {
+        FILE *fd = fopen(out, "wb");
+        fwrite(vel, sizeof(float), nzx, fd);
+        fclose(fd);
     }
     MPI_Finalize();
     return 0;

@@ -94,12 +94,17 @@ int main(int argc, char **argv)
     initargs(argc, argv);
     int nz, nx;
     int r1, r2;
-    float *v;
+    int cut;
+    float *v, *vv;
     char *s, *out;
     int repeat;
     if (!getparint("repeat", &repeat))
     {
         repeat = 1;
+    }
+    if (!getparint("cut", &cut))
+    {
+        cut = 0;
     }
     if (!getparint("n1", &nz))
     {
@@ -126,6 +131,8 @@ int main(int argc, char **argv)
         err("need output file");
     }
     v = alloc1float(nz * nx);
+    vv = alloc1float((nz - cut) * nx);
+
     {
         FILE *fd = fopen(s, "rb");
         if (fd == NULL)
@@ -135,7 +142,12 @@ int main(int argc, char **argv)
         fread(v, sizeof(float) * nz * nx, 1, fd);
         fclose(fd);
     }
-    triangle_smoothing(v, nz, nx, r1, r2, repeat);
+    for (int ix = 0; ix < nx; ix++)
+        memcpy(vv + ix * (nz - cut), v + ix * nz + cut, sizeof(float) * (nz - cut));
+
+    triangle_smoothing(vv, nz - cut, nx, r1, r2, repeat);
+    for (int ix = 0; ix < nx; ix++)
+        memcpy(v + ix * nz + cut, vv + ix * (nz - cut), sizeof(float) * (nz - cut));
     {
         FILE *fd = fopen(out, "wb");
         if (fd == NULL)

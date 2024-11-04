@@ -3,4 +3,8 @@
 *.txt
 *.dat
 *.
-bin/**
+bin/*
+test/*
+
+
+

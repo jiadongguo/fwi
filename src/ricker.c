@@ -22,14 +22,14 @@ int main(int argc, char **argv)
     if (!getparfloat("d1", &dt))
         err("need d1");
     if (!getparfloat("amp", &amp))
-        amp = 10;
+        amp = 1;
     if (!getparfloat("fm", &fm))
         err("need fm");
     if (!getparfloat("t0", &t0))
         t0 = 1. / fm;
     if (!getparstring("out", &out))
         err("need out");
-    FILE *fd = output(out);
+    FILE *fd = fopen(out, "wb");
     wt = alloc1float(nt);
     ricker(dt, fm, nt, amp, t0, wt);
     fwrite(wt, sizeof(float) * nt, 1, fd);

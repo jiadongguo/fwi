@@ -192,7 +192,7 @@ void eal_init(acpar par, float alpha_, int mode_, float *vv)
 
 void eal_apply(acpar par, float *pre, float *curr, float *next, float *vv)
 {
-    int nz, nx, nzb, nxb, nzxb, lft, top, bot, rht;
+    int nz, nx, nzb, nxb, lft, top;
     nz = par->nz, nx = par->nx, nzb = par->nzb, nxb = par->nxb, lft = par->lft, top = par->top;
     float dt = par->dt, dz = par->dz, dx = par->dx, tmp, lap;
     for (int ix = 0; ix < nxb; ix++)
