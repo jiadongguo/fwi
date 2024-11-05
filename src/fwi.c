@@ -29,10 +29,21 @@ void fdfor(acpar par, float *pre, float *curr, float *next, float *vv, float *la
             {
                 lap[(ix - lft) * nz + (iz - top)] = tmp;
             }
-            next[ix * nzb + iz] = laplace(nzb, nxb, iz, ix, curr, dz, dx) * (vv[ix * nzb + iz] * dt) * (vv[ix * nzb + iz] * dt) + 2 * curr[ix * nzb + iz] - pre[ix * nzb + iz];
+            next[ix * nzb + iz] = tmp * (vv[ix * nzb + iz] * dt) * (vv[ix * nzb + iz] * dt) + 2 * curr[ix * nzb + iz] - pre[ix * nzb + iz];
         }
     }
     eal_apply(par, pre, curr, next, vv);
+}
+float findalpha(acpar par, float *v, float *grad)
+{
+    float vmax = 0, gmax = 0;
+    int nzx = par->nzx;
+    for (int ix = 0; ix < nzx; ix++)
+    {
+        vmax = MAX(vmax, v[ix]);
+        gmax = MAX(gmax, grad[ix]);
+    }
+    return 0.01 * vmax / (gmax + TOL);
 }
 int main(int argc, char **argv)
 {
@@ -227,7 +238,8 @@ int main(int argc, char **argv)
         /*alpha*/
         if (rank == 0)
         {
-            for (int ix = 0; ix < nx; ix++)
+            alpha = findalpha(par, vel, gradient);
+            for (int ix = 0; ix < nzx; ix++)
             {
                 vel[ix] -= alpha * gradient[ix];
             }
