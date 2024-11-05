@@ -5,6 +5,14 @@ void eal_init(acpar par, float alpha_, int mode_, float *vv);
 void eal_apply(acpar par, float *pre, float *curr, float *next, float *vv);
 void eal_close();
 float laplace(int n1, int n2, int i1, int i2, float *curr, float d1, float d2);
+void bound(float *v, int n, float max, float min)
+{
+    for (int i = 0; i < n; i++)
+    {
+        v[i] = MAX(v[i], min);
+        v[i] = MIN(v[i], max);
+    }
+}
 void fdfor(acpar par, float *pre, float *curr, float *next, float *vv, float *lap)
 {
     int nz, nx, nzb, nxb, top, lft;
@@ -34,16 +42,15 @@ void fdfor(acpar par, float *pre, float *curr, float *next, float *vv, float *la
     }
     eal_apply(par, pre, curr, next, vv);
 }
-float findalpha(acpar par, float *v, float *grad)
+float findalpha(acpar par, float vmax, float *grad, float refl)
 {
-    float vmax = 0, gmax = 0;
+    float gmax = 0;
     int nzx = par->nzx;
     for (int ix = 0; ix < nzx; ix++)
     {
-        vmax = MAX(vmax, v[ix]);
         gmax = MAX(gmax, grad[ix]);
     }
-    return 0.01 * vmax / (gmax + TOL);
+    return refl * vmax / (gmax + TOL);
 }
 int main(int argc, char **argv)
 {
@@ -56,10 +63,11 @@ int main(int argc, char **argv)
     int nz, nx, nt, top, bot, lft, rht;
     int ns, sz, sx, jsx, jsz, rz, rx, jrx, jrz, nr;
     float dz, dx, dt;
-    char *fwt, *fvel, *out, *fobs;
+    char *fwt, *fvel, *out, *fobs, *fobj;
     float *wt, *vel;
     int mode;
     int niter;
+    float max, min;
     if (!getparbool("verb", &verb))
         verb = true;
     if (!getparint("mode", &mode))
@@ -108,10 +116,16 @@ int main(int argc, char **argv)
         err("need dx");
     if (!getparfloat("d1", &dz))
         err("need dz");
+    if (!getparfloat("min", &min))
+        err("need min");
+    if (!getparfloat("max", &max))
+        err("need max");
     if (!getparstring("vpfile", &fvel))
         err("need vp");
     if (!getparstring("wtfile", &fwt))
         err("need fwt");
+    if (!getparstring("fobj", &fobj))
+        err("need fobj");
     if (!getparstring("out", &out))
         err("need out");
     if ((sx + (ns - 1) * jsx >= nx) || (sz + (ns - 1) * jsz >= nz))
@@ -155,9 +169,16 @@ int main(int argc, char **argv)
     float *lap = alloc1float(nzx * nt);
     float alpha = 0.1;
     float objsum, obj;
+    float vmax = 0;
+    FILE *Fobj;
     if (rank == 0)
     {
+        Fobj = fopen(fobj, "w");
         gradient = alloc1float(nzx);
+        for (int ix = 0; ix < nzx; ix++)
+        {
+            vmax = MAX(vmax, vel[ix]);
+        }
     }
     clock_t start, finish;
     eal_init(par, 1e-4, mode, vv);
@@ -230,6 +251,7 @@ int main(int argc, char **argv)
         eal_close();
         if (rank == 0)
         {
+            fprintf(Fobj, "\t%d\t%g\n", iter + 1, objsum);
             warn("iter=%d,obj=%g", iter + 1, objsum);
         }
         MPI_Barrier(MPI_COMM_WORLD);
@@ -238,11 +260,21 @@ int main(int argc, char **argv)
         /*alpha*/
         if (rank == 0)
         {
-            alpha = findalpha(par, vel, gradient);
+            if (iter < 4)
+                alpha = findalpha(par, vmax, gradient, 0.01);
+            else if (iter < 100)
+            {
+                alpha = findalpha(par, vmax, gradient, 0.001);
+            }
+            else
+            {
+                alpha = findalpha(par, vmax, gradient, 0.0001);
+            }
             for (int ix = 0; ix < nzx; ix++)
             {
                 vel[ix] -= alpha * gradient[ix];
             }
+            bound(vel, nzx, max, min);
         }
         MPI_Bcast(vel, nzx, MPI_FLOAT, 0, MPI_COMM_WORLD);
         finish = clock();
@@ -256,6 +288,7 @@ int main(int argc, char **argv)
         FILE *fd = fopen(out, "wb");
         fwrite(vel, sizeof(float), nzx, fd);
         fclose(fd);
+        fclose(Fobj);
     }
     MPI_Finalize();
     return 0;
