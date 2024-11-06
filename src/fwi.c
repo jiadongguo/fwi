@@ -209,10 +209,10 @@ int main(int argc, char **argv)
                 MPI_File_read_at(fh, is * nt * nr * sizeof(float), dobs, nt * nr, MPI_FLOAT, &status);
                 for (int it = 0; it < nt; it++)
                 {
-                    if (verb && it % 100 == 0)
-                    {
-                        printf("forward modeling is=%d/%d,it=%d/%d\n", is + 1, ns0, it + 1, nt);
-                    }
+                    // if (verb && it % 100 == 0)
+                    // {
+                    //     printf("forward modeling is=%d/%d,it=%d/%d\n", is + 1, ns0, it + 1, nt);
+                    // }
                     fdfor(par, pre, curr, next, vv, lap + it * nzx);
                     tmp = pre, pre = curr, curr = next, next = tmp;
                     curr[is_x * nzb + is_z] += wt[it];
@@ -252,7 +252,6 @@ int main(int argc, char **argv)
         if (rank == 0)
         {
             fprintf(Fobj, "\t%d\t%g\n", iter + 1, objsum);
-            warn("iter=%d,obj=%g", iter + 1, objsum);
         }
         MPI_Barrier(MPI_COMM_WORLD);
         /*gradient*/
@@ -280,7 +279,7 @@ int main(int argc, char **argv)
         finish = clock();
         if (rank == 0)
         {
-            warn("iter%d finish cost %g seconds", iter + 1, 1. * (finish - start) / CLOCKS_PER_SEC);
+            warn("iter%d finish,obj=%g,cost time %g", iter + 1, objsum, 1. * (finish - start) / CLOCKS_PER_SEC);
         }
     }
     if (rank == 0)
