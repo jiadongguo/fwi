@@ -176,7 +176,8 @@ int main(int argc, char **argv)
     float objsum, obj;
     float vmax = 0;
     FILE *Fobj;
-    if (!getparfloat("alpha", &alpha))alpha=1e-3;
+    if (!getparfloat("alpha", &alpha))
+        alpha = 1e-3;
     if (rank == 0)
     {
         Fobj = fopen(fobj, "w");
@@ -207,6 +208,8 @@ int main(int argc, char **argv)
         {
             if (is < ns0)
             {
+                if (ill)
+                    memset(illum, 0, sizeof(float) * nzx);
                 memset(pre, 0, sizeof(float) * nzxb);
                 memset(curr, 0, sizeof(float) * nzxb);
                 memset(next, 0, sizeof(float) * nzxb);
@@ -226,7 +229,7 @@ int main(int argc, char **argv)
                         {
                             for (int iz = 0; iz < nz; iz++)
                             {
-                                illum[ix * nz + iz] = pow(curr[(ix + lft) * nzb + iz + top], 2);
+                                illum[ix * nz + iz] += pow(curr[(ix + lft) * nzb + iz + top], 2);
                             }
                         }
                     }
