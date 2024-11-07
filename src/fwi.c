@@ -242,7 +242,7 @@ int main(int argc, char **argv)
                     {
                         for (int iz = top + 10; iz < nz + top; iz++)
                         {
-                            grad[(ix - lft) * nz + (iz - top)] += curr[ix * nzb + iz] * lap[it * nz * nx + (ix - lft) * nz + (iz - top)];
+                            grad[(ix - lft) * nz + (iz - top)] += 2 * curr[ix * nzb + iz] * lap[it * nz * nx + (ix - lft) * nz + (iz - top)] / vv[ix * nzb + iz];
                         }
                     }
                 }
@@ -269,6 +269,7 @@ int main(int argc, char **argv)
             {
                 alpha = findalpha(par, vmax, gradient, 0.0001);
             }
+            alpha = 1e-2;
             for (int ix = 0; ix < nzx; ix++)
             {
                 vel[ix] -= alpha * gradient[ix];
