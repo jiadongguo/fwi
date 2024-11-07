@@ -176,6 +176,7 @@ int main(int argc, char **argv)
     float objsum, obj;
     float vmax = 0;
     FILE *Fobj;
+    if (!getparfloat("alpha", &alpha))alpha=1e-3;
     if (rank == 0)
     {
         Fobj = fopen(fobj, "w");
@@ -277,17 +278,6 @@ int main(int argc, char **argv)
         /*alpha*/
         if (rank == 0)
         {
-            if (iter < 4)
-                alpha = findalpha(par, vmax, gradient, 0.01);
-            else if (iter < 100)
-            {
-                alpha = findalpha(par, vmax, gradient, 0.001);
-            }
-            else
-            {
-                alpha = findalpha(par, vmax, gradient, 0.0001);
-            }
-            alpha = 1e-2;
             for (int ix = 0; ix < nzx; ix++)
             {
                 vel[ix] -= alpha * gradient[ix];
