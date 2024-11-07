@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     initargs(argc, argv);
-    bool verb;
+    bool verb, ill;
     int nz, nx, nt, top, bot, lft, rht;
     int ns, sz, sx, jsx, jsz, rz, rx, jrx, jrz, nr;
     float dz, dx, dt;
@@ -70,6 +70,8 @@ int main(int argc, char **argv)
     float max, min;
     if (!getparbool("verb", &verb))
         verb = true;
+    if (!getparbool("illum", &ill))
+        ill = true;
     if (!getparint("mode", &mode))
         mode = 0;
     if (!getparint("niter", &niter))
@@ -152,7 +154,10 @@ int main(int argc, char **argv)
     int nzb, nxb, nzxb, nzx;
     float *pre, *curr, *next, *tmp;
     float *dcal, *dobs;
+    float *illum;
     nzb = par->nzb, nxb = par->nxb, nzxb = nzb * nxb, nzx = nz * nx;
+    if (ill)
+        illum = alloc1float(nzx);
     pre = alloc1float(nzxb);
     curr = alloc1float(nzxb);
     next = alloc1float(nzxb);
@@ -214,6 +219,16 @@ int main(int argc, char **argv)
                     //     printf("forward modeling is=%d/%d,it=%d/%d\n", is + 1, ns0, it + 1, nt);
                     // }
                     fdfor(par, pre, curr, next, vv, lap + it * nzx);
+                    if (ill)
+                    {
+                        for (int ix = 0; ix < nx; ix++)
+                        {
+                            for (int iz = 0; iz < nz; iz++)
+                            {
+                                illum[ix * nz + iz] = pow(curr[(ix + lft) * nzb + iz + top], 2);
+                            }
+                        }
+                    }
                     tmp = pre, pre = curr, curr = next, next = tmp;
                     curr[is_x * nzb + is_z] += wt[it];
                     for (int ir = 0; ir < nr; ir++)
@@ -242,7 +257,10 @@ int main(int argc, char **argv)
                     {
                         for (int iz = top + 10; iz < nz + top; iz++)
                         {
-                            grad[(ix - lft) * nz + (iz - top)] += 2 * curr[ix * nzb + iz] * lap[it * nz * nx + (ix - lft) * nz + (iz - top)] / vv[ix * nzb + iz];
+                            if (ill)
+                                grad[(ix - lft) * nz + (iz - top)] += 2 * curr[ix * nzb + iz] * lap[it * nz * nx + (ix - lft) * nz + (iz - top)] / vv[ix * nzb + iz] / (illum[(ix - lft) * nz + (iz - top)] + EPS);
+                            else
+                                grad[(ix - lft) * nz + (iz - top)] += 2 * curr[ix * nzb + iz] * lap[it * nz * nx + (ix - lft) * nz + (iz - top)] / vv[ix * nzb + iz];
                         }
                     }
                 }
